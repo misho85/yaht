@@ -1,3 +1,6 @@
+use std::time::{Duration, Instant};
+
+use rand::{Rng, SeedableRng};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
@@ -7,12 +10,73 @@ use ratatui::{
 };
 use uuid::Uuid;
 
-use yaht_common::dice::{DiceSet, MAX_ROLLS};
+use yaht_common::dice::{Die, DiceSet, MAX_ROLLS};
 use yaht_common::game::{GameStateSnapshot, TurnPhase};
 use yaht_common::scoring::Category;
 
 use super::dice_widget;
 use super::scoreboard_widget;
+
+const ROLL_ANIM_DURATION: Duration = Duration::from_millis(600);
+const ROLL_ANIM_FRAME_INTERVAL: Duration = Duration::from_millis(60);
+const SCORE_FLASH_DURATION: Duration = Duration::from_millis(1500);
+
+/// Dice rolling animation state
+#[derive(Debug, Clone)]
+pub struct RollAnimation {
+    pub final_dice: DiceSet,
+    pub started_at: Instant,
+    pub last_frame: Instant,
+    pub current_display: [u8; 5],
+}
+
+impl RollAnimation {
+    pub fn new(final_dice: DiceSet) -> Self {
+        let now = Instant::now();
+        Self {
+            final_dice,
+            started_at: now,
+            last_frame: now,
+            current_display: [1, 1, 1, 1, 1],
+        }
+    }
+
+    pub fn is_done(&self) -> bool {
+        self.started_at.elapsed() >= ROLL_ANIM_DURATION
+    }
+
+    /// Advance animation frame, returns true if display changed
+    pub fn tick(&mut self) -> bool {
+        if self.is_done() {
+            return false;
+        }
+        if self.last_frame.elapsed() < ROLL_ANIM_FRAME_INTERVAL {
+            return false;
+        }
+        self.last_frame = Instant::now();
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        for i in 0..5 {
+            if !self.final_dice.dice[i].held {
+                self.current_display[i] = rng.gen_range(1..=6);
+            } else {
+                self.current_display[i] = self.final_dice.dice[i].value;
+            }
+        }
+        true
+    }
+
+    /// Get dice to display during animation
+    pub fn display_dice(&self) -> [Die; 5] {
+        let mut dice = [Die { value: 1, held: false }; 5];
+        for i in 0..5 {
+            dice[i] = Die {
+                value: self.current_display[i],
+                held: self.final_dice.dice[i].held,
+            };
+        }
+        dice
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct GameScreen {
@@ -27,6 +91,9 @@ pub struct GameScreen {
     pub chat_focused: bool,
     pub selected_category_index: usize,
     pub status_message: Option<String>,
+    // Animation state
+    pub roll_animation: Option<RollAnimation>,
+    pub score_flash: Option<(Category, u16, Instant)>,
 }
 
 impl GameScreen {
@@ -51,6 +118,8 @@ impl GameScreen {
             chat_focused: false,
             selected_category_index: 0,
             status_message: None,
+            roll_animation: None,
+            score_flash: None,
         }
     }
 
@@ -63,6 +132,27 @@ impl GameScreen {
             .get(snapshot.current_player_index)
             .map(|p| p.id);
         self.game_state = snapshot;
+    }
+
+    /// Called on each tick to advance animations
+    pub fn tick(&mut self) {
+        // Advance dice rolling animation
+        if let Some(ref mut anim) = self.roll_animation {
+            if anim.is_done() {
+                // Animation finished, set final dice
+                self.dice = Some(anim.final_dice);
+                self.roll_animation = None;
+            } else {
+                anim.tick();
+            }
+        }
+
+        // Clear expired score flash
+        if let Some((_, _, started)) = self.score_flash {
+            if started.elapsed() >= SCORE_FLASH_DURATION {
+                self.score_flash = None;
+            }
+        }
     }
 
     pub fn is_my_turn(&self, my_id: &Uuid) -> bool {
@@ -182,7 +272,18 @@ impl GameScreen {
     }
 
     fn draw_dice_area(&self, frame: &mut Frame, area: ratatui::layout::Rect) {
-        if let Some(ref dice) = self.dice {
+        // Check if we're in a rolling animation
+        if let Some(ref anim) = self.roll_animation {
+            let anim_dice = anim.display_dice();
+            let lines = dice_widget::render_dice_row_animated(&anim_dice, true);
+            let paragraph = Paragraph::new(lines).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan))
+                    .title(" Dice - Rolling... "),
+            );
+            frame.render_widget(paragraph, area);
+        } else if let Some(ref dice) = self.dice {
             let lines = dice_widget::render_dice_row(&dice.dice);
             let paragraph = Paragraph::new(lines).block(
                 Block::default()
@@ -204,13 +305,16 @@ impl GameScreen {
 
     fn draw_action_bar(&self, frame: &mut Frame, area: ratatui::layout::Rect) {
         let is_my_turn = self.is_my_turn(&self.my_player_id);
+        let is_rolling = self.roll_animation.is_some();
         let can_roll = is_my_turn
+            && !is_rolling
             && self.rolls_remaining > 0
             && matches!(
                 self.game_state.turn_phase.as_ref(),
                 Some(TurnPhase::WaitingForRoll) | Some(TurnPhase::Rolling { .. })
             );
         let can_score = is_my_turn
+            && !is_rolling
             && matches!(
                 self.game_state.turn_phase.as_ref(),
                 Some(TurnPhase::Rolling { .. }) | Some(TurnPhase::MustScore)
@@ -218,7 +322,14 @@ impl GameScreen {
 
         let mut lines = Vec::new();
 
-        if is_my_turn {
+        if is_rolling {
+            lines.push(Line::from(Span::styled(
+                "  Rolling dice...",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )));
+        } else if is_my_turn {
             let mut spans = vec![Span::raw("  ")];
             if can_roll {
                 spans.push(Span::styled("[R]", Style::default().fg(Color::Green)));
@@ -241,10 +352,21 @@ impl GameScreen {
         }
 
         if let Some(ref msg) = self.status_message {
-            lines.push(Line::from(Span::styled(
-                format!("  {}", msg),
-                Style::default().fg(Color::Cyan),
-            )));
+            // Flash the score message if within flash duration
+            let style = if let Some((_, _, started)) = self.score_flash {
+                let elapsed = started.elapsed().as_millis();
+                let blink = (elapsed / 200) % 2 == 0;
+                if blink {
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Green)
+                }
+            } else {
+                Style::default().fg(Color::Cyan)
+            };
+            lines.push(Line::from(Span::styled(format!("  {}", msg), style)));
         }
 
         frame.render_widget(Paragraph::new(lines), area);
@@ -325,13 +447,29 @@ impl GameScreen {
             None
         };
 
-        let dice_values = self.dice.as_ref().map(|d| d.values());
+        // Determine which dice to show potential scores for
+        let active_dice = if self.roll_animation.is_none() {
+            self.dice.as_ref().map(|d| d.values())
+        } else {
+            None
+        };
+
+        // Get the flash category for highlighting
+        let flash_cat = self.score_flash.as_ref().and_then(|(cat, score, started)| {
+            if started.elapsed() < SCORE_FLASH_DURATION {
+                Some((*cat, *score))
+            } else {
+                None
+            }
+        });
+
         let table = scoreboard_widget::build_scoreboard_table(
             &self.game_state.players,
             self.game_state.current_player_index,
-            dice_values.as_ref(),
+            active_dice.as_ref(),
             self.my_player_id,
             selected_all_idx,
+            flash_cat,
         );
         frame.render_widget(table, area);
     }

@@ -15,5 +15,6 @@ tracing-subscriber.workspace = true
 anyhow.workspace = true
 bytes.workspace = true
 futures.workspace = true
+rand.workspace = true
 ratatui = "0.29"
 crossterm = { version = "0.28", features = ["event-stream"] }

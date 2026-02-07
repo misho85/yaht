@@ -1347,6 +1347,7 @@ dependencies = [
  "bytes",
  "crossterm",
  "futures",
+ "rand",
  "ratatui",
  "serde",
  "serde_json",

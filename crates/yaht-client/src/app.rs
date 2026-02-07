@@ -73,7 +73,12 @@ pub async fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyho
                 }
                 None
             }
-            AppEvent::Tick => None,
+            AppEvent::Tick => {
+                if let Screen::Game(s) = &mut screen {
+                    s.tick();
+                }
+                None
+            }
         };
 
         if let Some(action) = action {
@@ -344,7 +349,8 @@ fn handle_server_message(
             rolls_remaining,
         } => {
             if let Screen::Game(s) = screen {
-                s.dice = Some(dice);
+                // Start dice rolling animation
+                s.roll_animation = Some(crate::ui::game::RollAnimation::new(dice));
                 s.rolls_remaining = rolls_remaining;
             }
         }
@@ -356,16 +362,28 @@ fn handle_server_message(
         }
 
         ServerMessage::CategoryScored {
-            player_id: _,
+            player_id: scored_pid,
             category,
             score,
         } => {
             if let Screen::Game(s) = screen {
+                // Update the scorecard in game_state so the scoreboard reflects new scores
+                if let Some(player) = s.game_state.players.iter_mut().find(|p| p.id == scored_pid) {
+                    let _ = player.scorecard.record(category, score);
+                }
+                let scorer_name = s
+                    .game_state
+                    .players
+                    .iter()
+                    .find(|p| p.id == scored_pid)
+                    .map(|p| p.name.clone())
+                    .unwrap_or_default();
                 s.status_message = Some(format!(
-                    "Scored {} for {}",
-                    score,
-                    category.display_name()
+                    "{} scored {} for {}",
+                    scorer_name, score, category.display_name()
                 ));
+                // Trigger score flash animation
+                s.score_flash = Some((category, score, std::time::Instant::now()));
             }
         }
 

@@ -1,20 +1,30 @@
 use ratatui::{
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
 };
 
 use yaht_common::dice::Die;
 
 /// Render ASCII art for a single die face using dot patterns.
-/// Returns 5 lines of styled text (3 for the die face + 1 border + 1 label).
+/// Returns 6 lines of styled text (top border + 3 face rows + bottom border + label).
 pub fn render_die(die: &Die, index: usize) -> Vec<Line<'static>> {
-    let border_style = if die.held {
+    render_die_styled(die, index, false)
+}
+
+fn render_die_styled(die: &Die, index: usize, animating: bool) -> Vec<Line<'static>> {
+    let border_style = if animating && !die.held {
+        Style::default().fg(Color::Cyan)
+    } else if die.held {
         Style::default().fg(Color::Yellow)
     } else {
         Style::default().fg(Color::White)
     };
 
-    let dot_style = if die.held {
+    let dot_style = if animating && !die.held {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else if die.held {
         Style::default().fg(Color::Yellow)
     } else {
         Style::default().fg(Color::White)
@@ -64,10 +74,15 @@ fn die_face(value: u8) -> (&'static str, &'static str, &'static str) {
 
 /// Render all 5 dice side by side as a block of lines.
 pub fn render_dice_row(dice: &[Die; 5]) -> Vec<Line<'static>> {
+    render_dice_row_animated(dice, false)
+}
+
+/// Render all 5 dice side by side, with optional animation styling.
+pub fn render_dice_row_animated(dice: &[Die; 5], animating: bool) -> Vec<Line<'static>> {
     let rendered: Vec<Vec<Line>> = dice
         .iter()
         .enumerate()
-        .map(|(i, d)| render_die(d, i))
+        .map(|(i, d)| render_die_styled(d, i, animating))
         .collect();
 
     let num_lines = rendered[0].len();

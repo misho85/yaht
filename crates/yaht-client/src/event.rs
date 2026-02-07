@@ -18,7 +18,7 @@ pub async fn event_loop(
     event_tx: mpsc::Sender<AppEvent>,
 ) {
     let mut key_stream = EventStream::new();
-    let mut tick_interval = tokio::time::interval(Duration::from_millis(250));
+    let mut tick_interval = tokio::time::interval(Duration::from_millis(50));
 
     loop {
         let event = tokio::select! {

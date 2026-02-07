@@ -13,6 +13,7 @@ pub fn build_scoreboard_table<'a>(
     dice_values: Option<&[u8; 5]>,
     my_player_id: uuid::Uuid,
     selected_category: Option<usize>,
+    flash_cat: Option<(Category, u16)>,
 ) -> Table<'a> {
     let header_cells: Vec<Cell> = std::iter::once(Cell::from("Category"))
         .chain(players.iter().map(|p| {
@@ -36,19 +37,40 @@ pub fn build_scoreboard_table<'a>(
     // Upper section
     for (cat_idx, cat) in Category::ALL.iter().enumerate() {
         let name = cat.display_name().to_string();
+        let is_flashing = flash_cat.map(|(fc, _)| fc == *cat).unwrap_or(false);
 
         let is_selected = selected_category == Some(cat_idx);
-        let row_style = if is_selected {
+        let row_style = if is_flashing {
+            Style::default()
+                .bg(Color::DarkGray)
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else if is_selected {
             Style::default().bg(Color::DarkGray)
         } else {
             Style::default()
         };
 
-        let mut cells: Vec<Cell> = vec![Cell::from(name)];
+        let name_style = if is_flashing {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        let mut cells: Vec<Cell> = vec![Cell::from(name).style(name_style)];
 
         for (player_idx, player) in players.iter().enumerate() {
             if let Some(&score) = player.scorecard.scores.get(cat) {
-                cells.push(Cell::from(score.to_string()));
+                let cell_style = if is_flashing {
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+                cells.push(Cell::from(score.to_string()).style(cell_style));
             } else if player_idx == current_player_index && dice_values.is_some() {
                 let potential = scoring::compute_score(*cat, dice_values.unwrap());
                 cells.push(
@@ -70,8 +92,10 @@ pub fn build_scoreboard_table<'a>(
             for player in players.iter() {
                 let bonus = player.scorecard.upper_bonus();
                 if bonus > 0 {
-                    bonus_cells.push(Cell::from(format!("+{}", bonus))
-                        .style(Style::default().fg(Color::Green)));
+                    bonus_cells.push(
+                        Cell::from(format!("+{}", bonus))
+                            .style(Style::default().fg(Color::Green)),
+                    );
                 } else {
                     let subtotal = player.scorecard.upper_subtotal();
                     bonus_cells.push(
@@ -96,20 +120,18 @@ pub fn build_scoreboard_table<'a>(
         .collect();
     rows.push(Row::new(sep_cells).style(Style::default().fg(Color::DarkGray)));
 
-    let mut total_cells: Vec<Cell> = vec![Cell::from("TOTAL")
-        .style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )];
+    let mut total_cells: Vec<Cell> = vec![Cell::from("TOTAL").style(
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )];
     for player in players.iter() {
         total_cells.push(
-            Cell::from(player.scorecard.grand_total().to_string())
-                .style(
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
+            Cell::from(player.scorecard.grand_total().to_string()).style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
         );
     }
     rows.push(Row::new(total_cells));
