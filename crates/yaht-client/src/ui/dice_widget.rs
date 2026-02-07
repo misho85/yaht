@@ -1,0 +1,90 @@
+use ratatui::{
+    style::{Color, Style},
+    text::{Line, Span},
+};
+
+use yaht_common::dice::Die;
+
+/// Render ASCII art for a single die face using dot patterns.
+/// Returns 5 lines of styled text (3 for the die face + 1 border + 1 label).
+pub fn render_die(die: &Die, index: usize) -> Vec<Line<'static>> {
+    let border_style = if die.held {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let dot_style = if die.held {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let (top, mid, bot) = die_face(die.value);
+
+    let label = if die.held {
+        format!(" [{}]* ", index + 1)
+    } else {
+        format!("  {}   ", index + 1)
+    };
+
+    vec![
+        Line::from(Span::styled("┌─────┐", border_style)),
+        Line::from(vec![
+            Span::styled("│", border_style),
+            Span::styled(top, dot_style),
+            Span::styled("│", border_style),
+        ]),
+        Line::from(vec![
+            Span::styled("│", border_style),
+            Span::styled(mid, dot_style),
+            Span::styled("│", border_style),
+        ]),
+        Line::from(vec![
+            Span::styled("│", border_style),
+            Span::styled(bot, dot_style),
+            Span::styled("│", border_style),
+        ]),
+        Line::from(Span::styled("└─────┘", border_style)),
+        Line::from(Span::styled(label, border_style)),
+    ]
+}
+
+fn die_face(value: u8) -> (&'static str, &'static str, &'static str) {
+    match value {
+        1 => ("     ", "  *  ", "     "),
+        2 => ("    *", "     ", "*    "),
+        3 => ("    *", "  *  ", "*    "),
+        4 => ("*   *", "     ", "*   *"),
+        5 => ("*   *", "  *  ", "*   *"),
+        6 => ("*   *", "*   *", "*   *"),
+        _ => ("     ", "  ?  ", "     "),
+    }
+}
+
+/// Render all 5 dice side by side as a block of lines.
+pub fn render_dice_row(dice: &[Die; 5]) -> Vec<Line<'static>> {
+    let rendered: Vec<Vec<Line>> = dice
+        .iter()
+        .enumerate()
+        .map(|(i, d)| render_die(d, i))
+        .collect();
+
+    let num_lines = rendered[0].len();
+    let mut result = Vec::new();
+
+    for line_idx in 0..num_lines {
+        let mut spans = Vec::new();
+        for (die_idx, die_lines) in rendered.iter().enumerate() {
+            if die_idx > 0 {
+                spans.push(Span::raw("  ")); // spacing between dice
+            }
+            for span in &die_lines[line_idx].spans {
+                spans.push(span.clone());
+            }
+        }
+        result.push(Line::from(spans));
+    }
+
+    result
+}

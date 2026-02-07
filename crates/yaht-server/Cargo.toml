@@ -1,0 +1,19 @@
+[package]
+name = "yaht-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+yaht-common = { path = "../yaht-common" }
+tokio.workspace = true
+tokio-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+rand.workspace = true
+bytes.workspace = true
+futures.workspace = true
+chrono.workspace = true
