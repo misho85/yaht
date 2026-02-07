@@ -16,10 +16,10 @@ impl LobbyManager {
         }
     }
 
-    pub fn create_room(&mut self, name: String, max_players: u8, host_id: Uuid) -> Uuid {
+    pub fn create_room(&mut self, name: String, max_players: u8, host_id: Uuid, password: Option<String>) -> Uuid {
         let id = Uuid::new_v4();
         self.rooms
-            .insert(id, Room::new(id, name, max_players, host_id));
+            .insert(id, Room::new(id, name, max_players, host_id, password));
         id
     }
 
@@ -44,6 +44,7 @@ impl LobbyManager {
     }
 
     /// Find which room a player is in.
+    #[allow(dead_code)]
     pub fn find_player_room(&self, player_id: Uuid) -> Option<Uuid> {
         for (room_id, room) in &self.rooms {
             if room.player_ids.contains(&player_id) || room.spectator_ids.contains(&player_id) {

@@ -20,6 +20,7 @@ use super::scoreboard_widget;
 const ROLL_ANIM_DURATION: Duration = Duration::from_millis(600);
 const ROLL_ANIM_FRAME_INTERVAL: Duration = Duration::from_millis(60);
 const SCORE_FLASH_DURATION: Duration = Duration::from_millis(1500);
+const TURN_TIMER_SECONDS: u64 = 60;
 
 /// Dice rolling animation state
 #[derive(Debug, Clone)]
@@ -94,6 +95,8 @@ pub struct GameScreen {
     // Animation state
     pub roll_animation: Option<RollAnimation>,
     pub score_flash: Option<(Category, u16, Instant)>,
+    // Turn timer
+    pub turn_started_at: Instant,
 }
 
 impl GameScreen {
@@ -120,6 +123,7 @@ impl GameScreen {
             status_message: None,
             roll_animation: None,
             score_flash: None,
+            turn_started_at: Instant::now(),
         }
     }
 
@@ -157,6 +161,15 @@ impl GameScreen {
 
     pub fn is_my_turn(&self, my_id: &Uuid) -> bool {
         self.current_turn_player_id.as_ref() == Some(my_id)
+    }
+
+    pub fn turn_remaining_seconds(&self) -> u64 {
+        let elapsed = self.turn_started_at.elapsed().as_secs();
+        TURN_TIMER_SECONDS.saturating_sub(elapsed)
+    }
+
+    pub fn reset_turn_timer(&mut self) {
+        self.turn_started_at = Instant::now();
     }
 
     pub fn selected_category(&self) -> Option<Category> {
@@ -263,6 +276,16 @@ impl GameScreen {
             Color::Rgb(180, 180, 200)
         };
 
+        // Turn timer
+        let remaining = self.turn_remaining_seconds();
+        let timer_color = if remaining <= 10 {
+            Color::Rgb(255, 80, 80) // Red when low
+        } else if remaining <= 20 {
+            Color::Rgb(255, 200, 100) // Orange when medium
+        } else {
+            Color::Rgb(100, 100, 120) // Dim when plenty of time
+        };
+
         let title = Line::from(vec![
             Span::styled(
                 " YAHT ",
@@ -281,6 +304,11 @@ impl GameScreen {
                 Style::default()
                     .fg(turn_color)
                     .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  |  ", Style::default().fg(Color::Rgb(80, 80, 100))),
+            Span::styled(
+                format!("{}s", remaining),
+                Style::default().fg(timer_color).add_modifier(if remaining <= 10 { Modifier::BOLD } else { Modifier::empty() }),
             ),
         ]);
         frame.render_widget(Paragraph::new(title), area);

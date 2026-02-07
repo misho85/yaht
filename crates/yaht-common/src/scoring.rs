@@ -135,6 +135,36 @@ pub fn compute_score(category: Category, dice: &[u8; 5]) -> u16 {
     }
 }
 
+/// Compute the score with Joker rules.
+/// When `joker_active` is true (Yahtzee bonus situation: dice are all same AND
+/// Yahtzee already scored as 50), Full House and Straights score their normal
+/// point values even though the dice don't literally match the pattern.
+pub fn compute_score_joker(category: Category, dice: &[u8; 5], joker_active: bool) -> u16 {
+    if joker_active && is_yahtzee(dice) {
+        match category {
+            // Upper section: normal scoring (sum of matching face)
+            Category::Ones => count_value(dice, 1),
+            Category::Twos => count_value(dice, 2),
+            Category::Threes => count_value(dice, 3),
+            Category::Fours => count_value(dice, 4),
+            Category::Fives => count_value(dice, 5),
+            Category::Sixes => count_value(dice, 6),
+            // N of a Kind: normal (sum all - Yahtzee qualifies)
+            Category::ThreeOfAKind | Category::FourOfAKind => sum(dice),
+            // Joker rules: Full House and Straights get full value
+            Category::FullHouse => 25,
+            Category::SmallStraight => 30,
+            Category::LargeStraight => 40,
+            // Yahtzee is already scored, so this gives 0
+            Category::Yahtzee => 0,
+            // Chance: sum all
+            Category::Chance => sum(dice),
+        }
+    } else {
+        compute_score(category, dice)
+    }
+}
+
 fn count_value(dice: &[u8; 5], val: u8) -> u16 {
     dice.iter().filter(|&&d| d == val).count() as u16 * val as u16
 }
@@ -277,5 +307,48 @@ mod tests {
         assert!(Category::Sixes.is_upper());
         assert!(!Category::ThreeOfAKind.is_upper());
         assert!(!Category::Yahtzee.is_upper());
+    }
+
+    // Joker rule tests
+    #[test]
+    fn test_joker_full_house() {
+        // Without joker: 5-of-a-kind is NOT a full house
+        assert_eq!(compute_score(Category::FullHouse, &[3, 3, 3, 3, 3]), 0);
+        // With joker: 5-of-a-kind scores full value for Full House
+        assert_eq!(compute_score_joker(Category::FullHouse, &[3, 3, 3, 3, 3], true), 25);
+    }
+
+    #[test]
+    fn test_joker_small_straight() {
+        // Without joker: 5-of-a-kind is NOT a straight
+        assert_eq!(compute_score(Category::SmallStraight, &[4, 4, 4, 4, 4]), 0);
+        // With joker: full value
+        assert_eq!(compute_score_joker(Category::SmallStraight, &[4, 4, 4, 4, 4], true), 30);
+    }
+
+    #[test]
+    fn test_joker_large_straight() {
+        assert_eq!(compute_score(Category::LargeStraight, &[6, 6, 6, 6, 6]), 0);
+        assert_eq!(compute_score_joker(Category::LargeStraight, &[6, 6, 6, 6, 6], true), 40);
+    }
+
+    #[test]
+    fn test_joker_three_of_a_kind() {
+        // Joker gives sum for N of a kind
+        assert_eq!(compute_score_joker(Category::ThreeOfAKind, &[5, 5, 5, 5, 5], true), 25);
+    }
+
+    #[test]
+    fn test_joker_not_active_normal_rules() {
+        // When joker is NOT active, normal rules apply
+        assert_eq!(compute_score_joker(Category::FullHouse, &[3, 3, 3, 3, 3], false), 0);
+        assert_eq!(compute_score_joker(Category::LargeStraight, &[6, 6, 6, 6, 6], false), 0);
+    }
+
+    #[test]
+    fn test_joker_upper_section() {
+        // Upper section works normally with joker
+        assert_eq!(compute_score_joker(Category::Sixes, &[6, 6, 6, 6, 6], true), 30);
+        assert_eq!(compute_score_joker(Category::Ones, &[6, 6, 6, 6, 6], true), 0);
     }
 }

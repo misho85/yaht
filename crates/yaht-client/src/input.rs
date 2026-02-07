@@ -6,6 +6,7 @@ use crate::app::Screen;
 pub enum Action {
     // Global
     Quit,
+    ShowHelp,
 
     // Text input
     TypeChar(char),
@@ -15,8 +16,6 @@ pub enum Action {
     // Navigation
     NavigateUp,
     NavigateDown,
-    NavigateLeft,
-    NavigateRight,
 
     // Connect screen
     SwitchField,
@@ -71,6 +70,7 @@ pub fn map_key(key: KeyEvent, screen: &Screen, chat_focused: bool) -> Option<Act
             KeyCode::Enter => Some(Action::StartGame),
             KeyCode::Esc => Some(Action::LeaveRoom),
             KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Char('?') => Some(Action::ShowHelp),
             _ => None,
         },
 
@@ -82,6 +82,7 @@ pub fn map_key(key: KeyEvent, screen: &Screen, chat_focused: bool) -> Option<Act
             KeyCode::Enter => Some(Action::JoinSelected),
             KeyCode::Up | KeyCode::Char('k') => Some(Action::NavigateUp),
             KeyCode::Down | KeyCode::Char('j') => Some(Action::NavigateDown),
+            KeyCode::Char('?') => Some(Action::ShowHelp),
             KeyCode::Esc => Some(Action::Quit),
             _ => None,
         },
@@ -99,6 +100,7 @@ pub fn map_key(key: KeyEvent, screen: &Screen, chat_focused: bool) -> Option<Act
             KeyCode::Up | KeyCode::Char('k') => Some(Action::NavigateUp),
             KeyCode::Down | KeyCode::Char('j') => Some(Action::NavigateDown),
             KeyCode::Enter => Some(Action::ConfirmScore),
+            KeyCode::Char('?') => Some(Action::ShowHelp),
             _ => None,
         },
 

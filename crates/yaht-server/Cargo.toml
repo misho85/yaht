@@ -17,3 +17,4 @@ rand.workspace = true
 bytes.workspace = true
 futures.workspace = true
 chrono.workspace = true
+clap.workspace = true

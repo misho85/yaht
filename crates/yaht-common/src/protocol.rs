@@ -34,9 +34,11 @@ pub enum ClientMessage {
     CreateRoom {
         room_name: String,
         max_players: u8,
+        password: Option<String>,
     },
     JoinRoom {
         room_id: Uuid,
+        password: Option<String>,
     },
     LeaveRoom,
     ListRooms,
@@ -169,6 +171,7 @@ pub enum ErrorCode {
     GameAlreadyStarted,
     NotEnoughPlayers,
     NameTaken,
+    WrongPassword,
     InternalError,
 }
 
@@ -317,8 +320,9 @@ mod tests {
             ClientMessage::CreateRoom {
                 room_name: "Room1".into(),
                 max_players: 4,
+                password: None,
             },
-            ClientMessage::JoinRoom { room_id },
+            ClientMessage::JoinRoom { room_id, password: None },
             ClientMessage::LeaveRoom,
             ClientMessage::ListRooms,
             ClientMessage::StartGame,

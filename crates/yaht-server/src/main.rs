@@ -6,6 +6,21 @@ mod server;
 
 use std::net::SocketAddr;
 
+use clap::Parser;
+
+/// YAHT Server - Multiplayer Yahtzee game server
+#[derive(Parser, Debug)]
+#[command(name = "yaht-server", version, about)]
+struct Args {
+    /// Address to bind the server to
+    #[arg(short, long, default_value = "0.0.0.0:9876")]
+    bind: String,
+
+    /// Maximum simultaneous connections allowed
+    #[arg(short, long, default_value_t = 100)]
+    max_connections: usize,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -15,11 +30,10 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let addr: SocketAddr = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "0.0.0.0:9876".to_string())
-        .parse()?;
+    let args = Args::parse();
 
-    tracing::info!("Starting yaht server on {}", addr);
-    server::run(addr).await
+    let addr: SocketAddr = args.bind.parse()?;
+
+    tracing::info!("Starting yaht server on {} (max {} connections)", addr, args.max_connections);
+    server::run(addr, args.max_connections).await
 }

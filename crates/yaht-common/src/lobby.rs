@@ -9,6 +9,7 @@ pub struct RoomInfo {
     pub max_players: u8,
     pub spectator_count: u8,
     pub state: RoomInfoState,
+    pub has_password: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

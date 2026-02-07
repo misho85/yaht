@@ -16,10 +16,11 @@ pub struct Room {
     pub player_ids: Vec<Uuid>,
     pub spectator_ids: Vec<Uuid>,
     pub game: Option<GameState>,
+    pub password: Option<String>,
 }
 
 impl Room {
-    pub fn new(id: Uuid, name: String, max_players: u8, host_id: Uuid) -> Self {
+    pub fn new(id: Uuid, name: String, max_players: u8, host_id: Uuid, password: Option<String>) -> Self {
         Self {
             id,
             name,
@@ -28,6 +29,14 @@ impl Room {
             player_ids: vec![host_id],
             spectator_ids: Vec::new(),
             game: None,
+            password,
+        }
+    }
+
+    pub fn check_password(&self, provided: &Option<String>) -> bool {
+        match &self.password {
+            None => true, // No password set, anyone can join
+            Some(pass) => provided.as_ref().map(|p| p == pass).unwrap_or(false),
         }
     }
 
@@ -78,6 +87,7 @@ impl Room {
             } else {
                 RoomInfoState::Waiting
             },
+            has_password: self.password.is_some(),
         }
     }
 

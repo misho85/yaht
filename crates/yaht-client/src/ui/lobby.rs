@@ -303,8 +303,9 @@ impl LobbyScreen {
                         RoomInfoState::InProgress => Color::Rgb(100, 200, 255),
                         RoomInfoState::Finished => Color::Rgb(100, 100, 120),
                     };
+                    let lock_icon = if room.has_password { "[locked] " } else { "" };
                     Row::new(vec![
-                        Cell::from(room.room_name.clone())
+                        Cell::from(format!("{}{}", lock_icon, room.room_name))
                             .style(Style::default().fg(Color::Rgb(200, 200, 220))),
                         Cell::from(format!("{}/{}", room.player_count, room.max_players))
                             .style(Style::default().fg(Color::Rgb(150, 150, 170))),

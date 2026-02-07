@@ -14,6 +14,7 @@ use crate::input::{self, Action};
 use crate::network;
 use crate::ui::connect::ConnectScreen;
 use crate::ui::game::GameScreen;
+use crate::ui::help_popup;
 use crate::ui::lobby::LobbyScreen;
 use crate::ui::results::ResultsScreen;
 
@@ -25,12 +26,22 @@ pub enum Screen {
     Results(ResultsScreen),
 }
 
-pub async fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyhow::Result<()> {
-    let mut screen = Screen::Connect(ConnectScreen::new());
+pub async fn run(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    default_server: String,
+    default_name: Option<String>,
+) -> anyhow::Result<()> {
+    let mut connect_screen = ConnectScreen::new();
+    connect_screen.host = default_server;
+    if let Some(name) = default_name {
+        connect_screen.name = name;
+    }
+    let mut screen = Screen::Connect(connect_screen);
     let mut player_id: Option<Uuid> = None;
     let mut player_name = String::new();
     let mut network_tx: Option<mpsc::Sender<ClientMessage>> = None;
     let mut running = true;
+    let mut show_help = false;
 
     let (local_event_tx, mut event_rx) = mpsc::channel::<AppEvent>(64);
 
@@ -50,17 +61,31 @@ pub async fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyho
     }));
 
     while running {
-        terminal.draw(|frame| match &screen {
-            Screen::Connect(s) => s.draw(frame),
-            Screen::Lobby(s) => s.draw(frame),
-            Screen::Game(s) => s.draw(frame),
-            Screen::Results(s) => s.draw(frame),
+        terminal.draw(|frame| {
+            match &screen {
+                Screen::Connect(s) => s.draw(frame),
+                Screen::Lobby(s) => s.draw(frame),
+                Screen::Game(s) => s.draw(frame),
+                Screen::Results(s) => s.draw(frame),
+            }
+            // Overlay help popup if active
+            if show_help {
+                help_popup::draw_help_popup(frame);
+            }
         })?;
 
         let event = match event_rx.recv().await {
             Some(e) => e,
             None => break,
         };
+
+        // If help is shown, any key dismisses it
+        if show_help {
+            if matches!(&event, AppEvent::Key(_)) {
+                show_help = false;
+                continue;
+            }
+        }
 
         let chat_focused = matches!(&screen, Screen::Game(g) if g.chat_focused);
         let action = match &event {
@@ -89,6 +114,10 @@ pub async fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyho
                         let _ = tx.send(ClientMessage::Disconnect).await;
                     }
                     running = false;
+                }
+
+                Action::ShowHelp => {
+                    show_help = !show_help;
                 }
 
                 Action::TypeChar(c) => match &mut screen {
@@ -158,6 +187,7 @@ pub async fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyho
                             .send(ClientMessage::CreateRoom {
                                 room_name: format!("{}'s room", player_name),
                                 max_players: 6,
+                                password: None,
                             })
                             .await;
                     }
@@ -166,7 +196,7 @@ pub async fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyho
                     if let Screen::Lobby(s) = &screen {
                         if let Some(room_id) = s.selected_room_id() {
                             if let Some(ref tx) = network_tx {
-                                let _ = tx.send(ClientMessage::JoinRoom { room_id }).await;
+                                let _ = tx.send(ClientMessage::JoinRoom { room_id, password: None }).await;
                             }
                         }
                     }
@@ -262,7 +292,6 @@ pub async fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyho
                     screen = Screen::Lobby(lobby);
                 }
 
-                _ => {}
             }
         }
     }
@@ -400,6 +429,13 @@ fn handle_server_message(
             turn_number,
         } => {
             if let Screen::Game(s) = screen {
+                // Ring bell if it's my turn
+                let is_my_turn = player_id.map(|pid| pid == turn_pid).unwrap_or(false);
+                if is_my_turn {
+                    // Terminal bell notification
+                    print!("\x07");
+                }
+
                 s.current_turn_player_id = Some(turn_pid);
                 // Update current_player_index so scoreboard shows potential scores in the right column
                 if let Some(idx) = s.game_state.players.iter().position(|p| p.id == turn_pid) {
@@ -411,6 +447,7 @@ fn handle_server_message(
                 s.dice = None;
                 s.selected_category_index = 0;
                 s.game_state.turn_phase = Some(TurnPhase::WaitingForRoll);
+                s.reset_turn_timer();
                 s.status_message =
                     Some(format!("{}'s turn (round {})", turn_name, turn_number));
             }
@@ -422,6 +459,8 @@ fn handle_server_message(
             final_scores,
             winner_id,
         } => {
+            // Bell on game over
+            print!("\x07");
             *screen = Screen::Results(ResultsScreen::new(final_scores, winner_id));
         }
 

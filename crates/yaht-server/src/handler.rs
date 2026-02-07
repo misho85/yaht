@@ -21,9 +21,10 @@ pub async fn handle_message(
         ClientMessage::CreateRoom {
             room_name,
             max_players,
+            password,
         } => {
             let mut lobby = state.lobby.write().await;
-            let room_id = lobby.create_room(room_name, max_players, player_id);
+            let room_id = lobby.create_room(room_name, max_players, player_id, password);
 
             // Update connection's room_id
             {
@@ -49,7 +50,7 @@ pub async fn handle_message(
             }
         }
 
-        ClientMessage::JoinRoom { room_id } => {
+        ClientMessage::JoinRoom { room_id, password } => {
             let mut lobby = state.lobby.write().await;
             let room = match lobby.get_room_mut(&room_id) {
                 Some(r) => r,
@@ -66,6 +67,20 @@ pub async fn handle_message(
                     return Ok(());
                 }
             };
+
+            // Check password
+            if !room.check_password(&password) {
+                send_to_player(
+                    player_id,
+                    ServerMessage::Error {
+                        code: ErrorCode::WrongPassword,
+                        message: "Wrong room password".into(),
+                    },
+                    state,
+                )
+                .await;
+                return Ok(());
+            }
 
             if let Err(_) = room.add_player(player_id) {
                 send_to_player(

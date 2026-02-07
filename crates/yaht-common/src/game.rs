@@ -123,6 +123,21 @@ impl GameState {
         Ok(())
     }
 
+    /// Start a game with 1+ players (allows solo play against AI).
+    pub fn start_solo(&mut self) -> Result<(), GameError> {
+        if self.players.is_empty() {
+            return Err(GameError::NotEnoughPlayers);
+        }
+        if self.players.len() > 6 {
+            return Err(GameError::TooManyPlayers);
+        }
+        self.phase = GamePhase::Playing;
+        self.round = 1;
+        self.current_player_index = 0;
+        self.turn = Some(TurnState::new(self.current_player().id));
+        Ok(())
+    }
+
     pub fn current_player(&self) -> &Player {
         &self.players[self.current_player_index]
     }
@@ -182,13 +197,15 @@ impl GameState {
 
         // Yahtzee bonus: if dice are a Yahtzee AND the player already scored
         // Yahtzee with 50, they get a 100-point bonus.
-        if is_yahtzee
-            && self.current_player().scorecard.scores.get(&Category::Yahtzee) == Some(&50)
-        {
+        let joker_active = is_yahtzee
+            && self.current_player().scorecard.scores.get(&Category::Yahtzee) == Some(&50);
+
+        if joker_active {
             self.current_player_mut().scorecard.add_yahtzee_bonus();
         }
 
-        let score = scoring::compute_score(category, &dice_values);
+        // Use Joker scoring when applicable (Full House/Straights score full value with Yahtzee)
+        let score = scoring::compute_score_joker(category, &dice_values, joker_active);
         self.current_player_mut()
             .scorecard
             .record(category, score)
@@ -444,5 +461,150 @@ mod tests {
         let deserialized: GameStateSnapshot = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.players.len(), 3);
         assert_eq!(deserialized.phase, GamePhase::Lobby);
+    }
+
+    #[test]
+    fn test_solo_start_with_one_player() {
+        let mut game = GameState::new(make_players(1));
+        assert!(game.start_solo().is_ok());
+        assert_eq!(game.phase, GamePhase::Playing);
+    }
+
+    #[test]
+    fn test_solo_start_with_multiple_players() {
+        let mut game = GameState::new(make_players(3));
+        assert!(game.start_solo().is_ok());
+        assert_eq!(game.phase, GamePhase::Playing);
+        assert_eq!(game.players.len(), 3);
+    }
+
+    #[test]
+    fn test_hold_dice_during_turn() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let players = make_players(2);
+        let p1_id = players[0].id;
+        let mut game = GameState::new(players);
+        game.start().unwrap();
+
+        // Roll first
+        game.roll_dice(p1_id, &mut rng).unwrap();
+
+        // Hold dice 0 and 2
+        game.hold_dice(p1_id, [true, false, true, false, false]).unwrap();
+        let turn = game.turn.as_ref().unwrap();
+        assert!(turn.dice.dice[0].held);
+        assert!(!turn.dice.dice[1].held);
+        assert!(turn.dice.dice[2].held);
+
+        // Roll again - held dice should keep their values
+        let held_val_0 = turn.dice.dice[0].value;
+        let held_val_2 = turn.dice.dice[2].value;
+        game.roll_dice(p1_id, &mut rng).unwrap();
+        let turn = game.turn.as_ref().unwrap();
+        assert_eq!(turn.dice.dice[0].value, held_val_0);
+        assert_eq!(turn.dice.dice[2].value, held_val_2);
+    }
+
+    #[test]
+    fn test_category_already_scored() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let players = make_players(2);
+        let p1_id = players[0].id;
+        let p2_id = players[1].id;
+        let mut game = GameState::new(players);
+        game.start().unwrap();
+
+        // P1 rolls and scores Chance
+        game.roll_dice(p1_id, &mut rng).unwrap();
+        game.score_category(p1_id, Category::Chance).unwrap();
+
+        // P2 rolls and scores Ones
+        game.roll_dice(p2_id, &mut rng).unwrap();
+        game.score_category(p2_id, Category::Ones).unwrap();
+
+        // P1 tries to score Chance again - should fail
+        game.roll_dice(p1_id, &mut rng).unwrap();
+        assert!(matches!(
+            game.score_category(p1_id, Category::Chance),
+            Err(GameError::CategoryAlreadyScored)
+        ));
+    }
+
+    #[test]
+    fn test_yahtzee_bonus_scoring() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let players = make_players(2);
+        let p1_id = players[0].id;
+        let p2_id = players[1].id;
+        let mut game = GameState::new(players);
+        game.start().unwrap();
+
+        // Manually set dice to all 5s for yahtzee
+        game.roll_dice(p1_id, &mut rng).unwrap();
+        let turn = game.turn.as_mut().unwrap();
+        for die in &mut turn.dice.dice {
+            die.value = 5;
+        }
+
+        // Score Yahtzee
+        let score = game.score_category(p1_id, Category::Yahtzee).unwrap();
+        assert_eq!(score, 50);
+
+        // P2's turn
+        game.roll_dice(p2_id, &mut rng).unwrap();
+        game.score_category(p2_id, Category::Chance).unwrap();
+
+        // P1 gets another Yahtzee
+        game.roll_dice(p1_id, &mut rng).unwrap();
+        let turn = game.turn.as_mut().unwrap();
+        for die in &mut turn.dice.dice {
+            die.value = 5;
+        }
+
+        // Score Fives (Yahtzee bonus should be triggered)
+        game.score_category(p1_id, Category::Fives).unwrap();
+        assert_eq!(game.players[0].scorecard.yahtzee_bonus_count, 1);
+    }
+
+    #[test]
+    fn test_full_game_six_players() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(777);
+        let players = make_players(6);
+        let ids: Vec<Uuid> = players.iter().map(|p| p.id).collect();
+        let mut game = GameState::new(players);
+        game.start().unwrap();
+
+        let categories = Category::ALL;
+        for round_idx in 0..13 {
+            for player_idx in 0..6 {
+                let pid = ids[player_idx];
+                assert!(game.is_current_player(pid));
+                game.roll_dice(pid, &mut rng).unwrap();
+                let cat = categories[round_idx];
+                game.score_category(pid, cat).unwrap();
+            }
+        }
+
+        assert_eq!(game.phase, GamePhase::Finished);
+        assert!(game.winner().is_some());
+        // All players should have complete scorecards
+        for player in &game.players {
+            assert!(player.scorecard.is_complete());
+        }
+    }
+
+    #[test]
+    fn test_game_not_started_actions_fail() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let players = make_players(2);
+        let p1_id = players[0].id;
+        let game = GameState::new(players);
+
+        // Game is in Lobby phase, should fail
+        let mut game_clone = game.clone();
+        assert!(matches!(
+            game_clone.roll_dice(p1_id, &mut rng),
+            Err(GameError::GameNotInProgress)
+        ));
     }
 }
