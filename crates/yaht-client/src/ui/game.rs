@@ -256,17 +256,32 @@ impl GameScreen {
             .map(|p| p.name.as_str())
             .unwrap_or("?");
 
+        let is_my_turn = self.is_my_turn(&self.my_player_id);
+        let turn_color = if is_my_turn {
+            Color::Rgb(100, 255, 150)
+        } else {
+            Color::Rgb(180, 180, 200)
+        };
+
         let title = Line::from(vec![
             Span::styled(
                 " YAHT ",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Rgb(255, 220, 50))
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(format!(
-                " Round {}/{}  |  Turn: {}",
-                self.round, self.game_state.total_rounds, current_name
-            )),
+            Span::styled(
+                format!(" Round {}/{}", self.round, self.game_state.total_rounds),
+                Style::default().fg(Color::Rgb(150, 150, 170)),
+            ),
+            Span::styled("  |  ", Style::default().fg(Color::Rgb(80, 80, 100))),
+            Span::styled("Turn: ", Style::default().fg(Color::Rgb(150, 150, 170))),
+            Span::styled(
+                current_name,
+                Style::default()
+                    .fg(turn_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]);
         frame.render_widget(Paragraph::new(title), area);
     }
@@ -279,8 +294,13 @@ impl GameScreen {
             let paragraph = Paragraph::new(lines).block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan))
-                    .title(" Dice - Rolling... "),
+                    .border_style(Style::default().fg(Color::Rgb(100, 200, 255)))
+                    .title(" Dice - Rolling... ")
+                    .title_style(
+                        Style::default()
+                            .fg(Color::Rgb(100, 200, 255))
+                            .add_modifier(Modifier::BOLD),
+                    ),
             );
             frame.render_widget(paragraph, area);
         } else if let Some(ref dice) = self.dice {
@@ -288,16 +308,20 @@ impl GameScreen {
             let paragraph = Paragraph::new(lines).block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(" Dice "),
+                    .border_style(Style::default().fg(Color::Rgb(80, 80, 100)))
+                    .title(" Dice ")
+                    .title_style(Style::default().fg(Color::Rgb(180, 180, 200))),
             );
             frame.render_widget(paragraph, area);
         } else {
             let paragraph = Paragraph::new("  Waiting for roll...")
-                .style(Style::default().fg(Color::DarkGray))
+                .style(Style::default().fg(Color::Rgb(100, 100, 120)))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title(" Dice "),
+                        .border_style(Style::default().fg(Color::Rgb(60, 60, 80)))
+                        .title(" Dice ")
+                        .title_style(Style::default().fg(Color::Rgb(120, 120, 140))),
                 );
             frame.render_widget(paragraph, area);
         }
@@ -326,45 +350,72 @@ impl GameScreen {
             lines.push(Line::from(Span::styled(
                 "  Rolling dice...",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(Color::Rgb(100, 200, 255))
                     .add_modifier(Modifier::BOLD),
             )));
         } else if is_my_turn {
             let mut spans = vec![Span::raw("  ")];
             if can_roll {
-                spans.push(Span::styled("[R]", Style::default().fg(Color::Green)));
-                spans.push(Span::raw(format!(" Roll ({} left)  ", self.rolls_remaining)));
+                spans.push(Span::styled(
+                    "[R]",
+                    Style::default()
+                        .fg(Color::Rgb(100, 255, 150))
+                        .add_modifier(Modifier::BOLD),
+                ));
+                spans.push(Span::styled(
+                    format!(" Roll ({} left)  ", self.rolls_remaining),
+                    Style::default().fg(Color::Rgb(150, 150, 170)),
+                ));
             }
-            spans.push(Span::styled("[1-5]", Style::default().fg(Color::Cyan)));
-            spans.push(Span::raw(" Hold  "));
+            spans.push(Span::styled(
+                "[1-5]",
+                Style::default().fg(Color::Rgb(100, 200, 255)),
+            ));
+            spans.push(Span::styled(
+                " Hold  ",
+                Style::default().fg(Color::Rgb(150, 150, 170)),
+            ));
             if can_score {
-                spans.push(Span::styled("[S]", Style::default().fg(Color::Magenta)));
-                spans.push(Span::raw(" Score  "));
+                spans.push(Span::styled(
+                    "[S]",
+                    Style::default()
+                        .fg(Color::Rgb(200, 150, 255))
+                        .add_modifier(Modifier::BOLD),
+                ));
+                spans.push(Span::styled(
+                    " Score  ",
+                    Style::default().fg(Color::Rgb(150, 150, 170)),
+                ));
             }
-            spans.push(Span::styled("[C]", Style::default().fg(Color::Blue)));
-            spans.push(Span::raw(" Chat"));
+            spans.push(Span::styled(
+                "[C]",
+                Style::default().fg(Color::Rgb(100, 180, 255)),
+            ));
+            spans.push(Span::styled(
+                " Chat",
+                Style::default().fg(Color::Rgb(150, 150, 170)),
+            ));
             lines.push(Line::from(spans));
         } else {
             lines.push(Line::from(Span::styled(
                 "  Waiting for other player's turn...",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Color::Rgb(100, 100, 120)),
             )));
         }
 
         if let Some(ref msg) = self.status_message {
-            // Flash the score message if within flash duration
             let style = if let Some((_, _, started)) = self.score_flash {
                 let elapsed = started.elapsed().as_millis();
                 let blink = (elapsed / 200) % 2 == 0;
                 if blink {
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(Color::Rgb(255, 220, 50))
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::Green)
+                    Style::default().fg(Color::Rgb(100, 255, 150))
                 }
             } else {
-                Style::default().fg(Color::Cyan)
+                Style::default().fg(Color::Rgb(100, 200, 255))
             };
             lines.push(Line::from(Span::styled(format!("  {}", msg), style)));
         }
@@ -386,10 +437,27 @@ impl GameScreen {
                 if msg.starts_with("[System]") {
                     Line::from(Span::styled(
                         format!("  {}", msg),
-                        Style::default().fg(Color::DarkGray),
+                        Style::default().fg(Color::Rgb(100, 100, 120)),
                     ))
+                } else if let Some(colon_pos) = msg.find(':') {
+                    let (name, rest) = msg.split_at(colon_pos);
+                    Line::from(vec![
+                        Span::styled(
+                            format!("  {}", name),
+                            Style::default()
+                                .fg(Color::Rgb(100, 200, 255))
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            rest.to_string(),
+                            Style::default().fg(Color::Rgb(200, 200, 220)),
+                        ),
+                    ])
                 } else {
-                    Line::from(Span::raw(format!("  {}", msg)))
+                    Line::from(Span::styled(
+                        format!("  {}", msg),
+                        Style::default().fg(Color::Rgb(200, 200, 220)),
+                    ))
                 }
             })
             .collect();
@@ -398,24 +466,33 @@ impl GameScreen {
         let style = if self.chat_focused {
             Style::default().fg(Color::White)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(Color::Rgb(80, 80, 100))
         };
         lines.push(Line::from(Span::styled(
             format!("{}{}", prefix, self.chat_input),
             style,
         )));
 
-        let border_style = if self.chat_focused {
-            Style::default().fg(Color::Blue)
+        let (border_style, title_style) = if self.chat_focused {
+            (
+                Style::default().fg(Color::Rgb(100, 180, 255)),
+                Style::default()
+                    .fg(Color::Rgb(100, 180, 255))
+                    .add_modifier(Modifier::BOLD),
+            )
         } else {
-            Style::default()
+            (
+                Style::default().fg(Color::Rgb(60, 60, 80)),
+                Style::default().fg(Color::Rgb(120, 120, 140)),
+            )
         };
 
         let paragraph = Paragraph::new(lines).block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(border_style)
-                .title(" Chat "),
+                .title(" Chat ")
+                .title_style(title_style),
         );
         frame.render_widget(paragraph, area);
 

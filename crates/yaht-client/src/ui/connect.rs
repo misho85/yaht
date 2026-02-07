@@ -97,57 +97,91 @@ impl ConnectScreen {
             Span::styled(
                 "  YAHT ",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Rgb(255, 220, 50))
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(" - Multiplayer Yahtzee"),
+            Span::styled(
+                "- Multiplayer Yahtzee",
+                Style::default().fg(Color::Rgb(180, 180, 200)),
+            ),
         ]));
         frame.render_widget(title, chunks[0]);
 
         // Name field
-        let name_style = if self.active_field == ConnectField::Name {
-            Style::default().fg(Color::Yellow)
+        let (name_border, name_title_style) = if self.active_field == ConnectField::Name {
+            (
+                Style::default().fg(Color::Rgb(100, 200, 255)),
+                Style::default()
+                    .fg(Color::Rgb(100, 200, 255))
+                    .add_modifier(Modifier::BOLD),
+            )
         } else {
-            Style::default().fg(Color::White)
+            (
+                Style::default().fg(Color::Rgb(80, 80, 100)),
+                Style::default().fg(Color::Rgb(120, 120, 140)),
+            )
         };
         let name_input = Paragraph::new(self.name.as_str())
+            .style(Style::default().fg(Color::White))
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(name_style)
-                    .title(" Player Name "),
+                    .border_style(name_border)
+                    .title(" Player Name ")
+                    .title_style(name_title_style),
             );
         frame.render_widget(name_input, chunks[1]);
 
         // Host field
-        let host_style = if self.active_field == ConnectField::Host {
-            Style::default().fg(Color::Yellow)
+        let (host_border, host_title_style) = if self.active_field == ConnectField::Host {
+            (
+                Style::default().fg(Color::Rgb(100, 200, 255)),
+                Style::default()
+                    .fg(Color::Rgb(100, 200, 255))
+                    .add_modifier(Modifier::BOLD),
+            )
         } else {
-            Style::default().fg(Color::White)
+            (
+                Style::default().fg(Color::Rgb(80, 80, 100)),
+                Style::default().fg(Color::Rgb(120, 120, 140)),
+            )
         };
         let host_input = Paragraph::new(self.host.as_str())
+            .style(Style::default().fg(Color::Rgb(180, 180, 200)))
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(host_style)
-                    .title(" Server Address "),
+                    .border_style(host_border)
+                    .title(" Server Address ")
+                    .title_style(host_title_style),
             );
         frame.render_widget(host_input, chunks[2]);
 
         // Status/Error
         if self.connecting {
             let status = Paragraph::new("  Connecting...")
-                .style(Style::default().fg(Color::Cyan));
+                .style(
+                    Style::default()
+                        .fg(Color::Rgb(100, 200, 255))
+                        .add_modifier(Modifier::BOLD),
+                );
             frame.render_widget(status, chunks[3]);
         } else if let Some(ref err) = self.error_message {
             let error = Paragraph::new(format!("  {}", err))
-                .style(Style::default().fg(Color::Red));
+                .style(Style::default().fg(Color::Rgb(255, 100, 100)));
             frame.render_widget(error, chunks[3]);
         }
 
         // Help
-        let help = Paragraph::new("  [Tab] Switch field  [Enter] Connect  [Esc] Quit")
-            .style(Style::default().fg(Color::DarkGray));
+        let help = Paragraph::new(Line::from(vec![
+            Span::raw("  "),
+            Span::styled("[Tab]", Style::default().fg(Color::Rgb(100, 200, 255))),
+            Span::styled(" Switch  ", Style::default().fg(Color::Rgb(120, 120, 140))),
+            Span::styled("[Enter]", Style::default().fg(Color::Rgb(100, 255, 150))),
+            Span::styled(" Connect  ", Style::default().fg(Color::Rgb(120, 120, 140))),
+            Span::styled("[Esc]", Style::default().fg(Color::Rgb(255, 150, 100))),
+            Span::styled(" Quit", Style::default().fg(Color::Rgb(120, 120, 140))),
+        ]));
         frame.render_widget(help, chunks[4]);
 
         // Set cursor position

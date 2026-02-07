@@ -120,10 +120,13 @@ impl LobbyScreen {
             Span::styled(
                 "  YAHT ",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Rgb(255, 220, 50))
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(" - Waiting Room"),
+            Span::styled(
+                "- Waiting Room",
+                Style::default().fg(Color::Rgb(180, 180, 200)),
+            ),
         ]));
         frame.render_widget(title, chunks[0]);
 
@@ -132,31 +135,47 @@ impl LobbyScreen {
             Span::raw("  "),
             Span::styled(
                 &room.room_name,
-                Style::default().add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Rgb(100, 200, 255))
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!("  ({}/{} players)", room.players.len(), room.max_players),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Color::Rgb(120, 120, 140)),
             ),
         ]));
         frame.render_widget(room_info, chunks[1]);
 
         // Player list
+        let player_colors = [
+            Color::Rgb(100, 200, 255),
+            Color::Rgb(255, 150, 100),
+            Color::Rgb(150, 255, 150),
+            Color::Rgb(255, 200, 100),
+            Color::Rgb(200, 150, 255),
+            Color::Rgb(255, 150, 200),
+        ];
         let mut player_lines: Vec<Line> = room
             .players
             .iter()
-            .map(|p| {
+            .enumerate()
+            .map(|(idx, p)| {
                 let marker = if p.id == room.host_id { " * " } else { "   " };
                 let color = if p.connected {
-                    Color::Green
+                    player_colors[idx % player_colors.len()]
                 } else {
-                    Color::DarkGray
+                    Color::Rgb(80, 80, 100)
                 };
                 Line::from(vec![
-                    Span::raw(marker),
+                    Span::styled(marker, Style::default().fg(Color::Rgb(120, 120, 140))),
                     Span::styled(&p.name, Style::default().fg(color)),
                     if p.id == room.host_id {
-                        Span::styled(" (host)", Style::default().fg(Color::Yellow))
+                        Span::styled(
+                            " (host)",
+                            Style::default()
+                                .fg(Color::Rgb(255, 220, 50))
+                                .add_modifier(Modifier::BOLD),
+                        )
                     } else {
                         Span::raw("")
                     },
@@ -167,33 +186,47 @@ impl LobbyScreen {
         if !room.spectators.is_empty() {
             player_lines.push(Line::from(Span::styled(
                 format!("   {} spectator(s)", room.spectators.len()),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Color::Rgb(120, 120, 140)),
             )));
         }
 
         let players_widget = Paragraph::new(player_lines).block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Players "),
+                .border_style(Style::default().fg(Color::Rgb(80, 80, 100)))
+                .title(" Players ")
+                .title_style(Style::default().fg(Color::Rgb(180, 180, 200))),
         );
         frame.render_widget(players_widget, chunks[2]);
 
         // Status
         if let Some(ref msg) = self.status_message {
             let status = Paragraph::new(format!("  {}", msg))
-                .style(Style::default().fg(Color::Cyan));
+                .style(Style::default().fg(Color::Rgb(100, 255, 150)));
             frame.render_widget(status, chunks[3]);
         }
 
         // Help
-        let help_text = if self.is_host() {
-            "  [Enter] Start Game  [Esc] Leave Room"
+        if self.is_host() {
+            let help = Paragraph::new(Line::from(vec![
+                Span::raw("  "),
+                Span::styled("[Enter]", Style::default().fg(Color::Rgb(100, 255, 150))),
+                Span::styled(" Start Game  ", Style::default().fg(Color::Rgb(120, 120, 140))),
+                Span::styled("[Esc]", Style::default().fg(Color::Rgb(255, 150, 100))),
+                Span::styled(" Leave Room", Style::default().fg(Color::Rgb(120, 120, 140))),
+            ]));
+            frame.render_widget(help, chunks[4]);
         } else {
-            "  Waiting for host to start...  [Esc] Leave Room"
-        };
-        let help = Paragraph::new(help_text)
-            .style(Style::default().fg(Color::DarkGray));
-        frame.render_widget(help, chunks[4]);
+            let help = Paragraph::new(Line::from(vec![
+                Span::styled(
+                    "  Waiting for host to start...  ",
+                    Style::default().fg(Color::Rgb(150, 150, 170)),
+                ),
+                Span::styled("[Esc]", Style::default().fg(Color::Rgb(255, 150, 100))),
+                Span::styled(" Leave Room", Style::default().fg(Color::Rgb(120, 120, 140))),
+            ]));
+            frame.render_widget(help, chunks[4]);
+        }
     }
 
     fn draw_room_list(&self, frame: &mut Frame) {
@@ -209,40 +242,52 @@ impl LobbyScreen {
             .split(area);
 
         // Title
-        let title = Paragraph::new(Line::from(format!(
-            "  YAHT Lobby - Welcome, {}!",
-            self.player_name
-        )))
-        .style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
-        .block(Block::default().borders(Borders::BOTTOM));
+        let title = Paragraph::new(Line::from(vec![
+            Span::styled(
+                "  YAHT ",
+                Style::default()
+                    .fg(Color::Rgb(255, 220, 50))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("Lobby - Welcome, ", Style::default().fg(Color::Rgb(180, 180, 200))),
+            Span::styled(
+                &self.player_name,
+                Style::default()
+                    .fg(Color::Rgb(100, 200, 255))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("!", Style::default().fg(Color::Rgb(180, 180, 200))),
+        ]))
+        .block(
+            Block::default()
+                .borders(Borders::BOTTOM)
+                .border_style(Style::default().fg(Color::Rgb(60, 60, 80))),
+        );
         frame.render_widget(title, chunks[0]);
 
         // Room list
         if self.rooms.is_empty() {
-            let empty = Paragraph::new("  No rooms available. Press [C] to create one.")
-                .style(Style::default().fg(Color::DarkGray))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title(" Rooms "),
-                );
+            let empty = Paragraph::new(Line::from(vec![
+                Span::styled("  No rooms available. Press ", Style::default().fg(Color::Rgb(120, 120, 140))),
+                Span::styled("[C]", Style::default().fg(Color::Rgb(100, 200, 255))),
+                Span::styled(" to create one.", Style::default().fg(Color::Rgb(120, 120, 140))),
+            ]))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Rgb(80, 80, 100)))
+                    .title(" Rooms ")
+                    .title_style(Style::default().fg(Color::Rgb(180, 180, 200))),
+            );
             frame.render_widget(empty, chunks[1]);
         } else {
             let header = Row::new(vec![
-                Cell::from("Room Name"),
-                Cell::from("Players"),
-                Cell::from("Spectators"),
-                Cell::from("Status"),
+                Cell::from("Room Name").style(Style::default().fg(Color::Rgb(180, 180, 200))),
+                Cell::from("Players").style(Style::default().fg(Color::Rgb(180, 180, 200))),
+                Cell::from("Spectators").style(Style::default().fg(Color::Rgb(180, 180, 200))),
+                Cell::from("Status").style(Style::default().fg(Color::Rgb(180, 180, 200))),
             ])
-            .style(
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            );
+            .style(Style::default().add_modifier(Modifier::BOLD));
 
             let rows: Vec<Row> = self
                 .rooms
@@ -254,14 +299,17 @@ impl LobbyScreen {
                         RoomInfoState::Finished => "Finished",
                     };
                     let status_color = match room.state {
-                        RoomInfoState::Waiting => Color::Green,
-                        RoomInfoState::InProgress => Color::Cyan,
-                        RoomInfoState::Finished => Color::DarkGray,
+                        RoomInfoState::Waiting => Color::Rgb(100, 255, 150),
+                        RoomInfoState::InProgress => Color::Rgb(100, 200, 255),
+                        RoomInfoState::Finished => Color::Rgb(100, 100, 120),
                     };
                     Row::new(vec![
-                        Cell::from(room.room_name.clone()),
-                        Cell::from(format!("{}/{}", room.player_count, room.max_players)),
-                        Cell::from(format!("{}", room.spectator_count)),
+                        Cell::from(room.room_name.clone())
+                            .style(Style::default().fg(Color::Rgb(200, 200, 220))),
+                        Cell::from(format!("{}/{}", room.player_count, room.max_players))
+                            .style(Style::default().fg(Color::Rgb(150, 150, 170))),
+                        Cell::from(format!("{}", room.spectator_count))
+                            .style(Style::default().fg(Color::Rgb(150, 150, 170))),
                         Cell::from(status).style(Style::default().fg(status_color)),
                     ])
                 })
@@ -279,11 +327,13 @@ impl LobbyScreen {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title(" Rooms "),
+                        .border_style(Style::default().fg(Color::Rgb(80, 80, 100)))
+                        .title(" Rooms ")
+                        .title_style(Style::default().fg(Color::Rgb(180, 180, 200))),
                 )
                 .row_highlight_style(
                     Style::default()
-                        .bg(Color::DarkGray)
+                        .bg(Color::Rgb(40, 40, 60))
                         .add_modifier(Modifier::BOLD),
                 )
                 .highlight_symbol(" > ");
@@ -293,14 +343,30 @@ impl LobbyScreen {
         }
 
         // Help bar
-        let help_text = if let Some(ref msg) = self.status_message {
-            format!("  {} | [C] Create  [Enter] Join  [S] Spectate  [R] Refresh  [Q] Quit", msg)
-        } else {
-            "  [C] Create room  [Enter] Join  [S] Spectate  [R] Refresh  [Q] Quit".to_string()
-        };
-        let help = Paragraph::new(help_text)
-            .style(Style::default().fg(Color::DarkGray))
-            .block(Block::default().borders(Borders::TOP));
+        let mut help_spans = vec![Span::raw("  ")];
+        if let Some(ref msg) = self.status_message {
+            help_spans.push(Span::styled(
+                format!("{} | ", msg),
+                Style::default().fg(Color::Rgb(100, 255, 150)),
+            ));
+        }
+        help_spans.extend_from_slice(&[
+            Span::styled("[C]", Style::default().fg(Color::Rgb(100, 200, 255))),
+            Span::styled(" Create  ", Style::default().fg(Color::Rgb(120, 120, 140))),
+            Span::styled("[Enter]", Style::default().fg(Color::Rgb(100, 255, 150))),
+            Span::styled(" Join  ", Style::default().fg(Color::Rgb(120, 120, 140))),
+            Span::styled("[S]", Style::default().fg(Color::Rgb(200, 150, 255))),
+            Span::styled(" Spectate  ", Style::default().fg(Color::Rgb(120, 120, 140))),
+            Span::styled("[R]", Style::default().fg(Color::Rgb(255, 200, 100))),
+            Span::styled(" Refresh  ", Style::default().fg(Color::Rgb(120, 120, 140))),
+            Span::styled("[Q]", Style::default().fg(Color::Rgb(255, 150, 100))),
+            Span::styled(" Quit", Style::default().fg(Color::Rgb(120, 120, 140))),
+        ]);
+        let help = Paragraph::new(Line::from(help_spans)).block(
+            Block::default()
+                .borders(Borders::TOP)
+                .border_style(Style::default().fg(Color::Rgb(60, 60, 80))),
+        );
         frame.render_widget(help, chunks[2]);
     }
 }

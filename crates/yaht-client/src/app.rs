@@ -6,6 +6,7 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use yaht_common::dice::MAX_ROLLS;
+use yaht_common::game::TurnPhase;
 use yaht_common::protocol::{ClientMessage, ServerMessage};
 
 use crate::event::{self, AppEvent};
@@ -352,6 +353,12 @@ fn handle_server_message(
                 // Start dice rolling animation
                 s.roll_animation = Some(crate::ui::game::RollAnimation::new(dice));
                 s.rolls_remaining = rolls_remaining;
+                // Update turn phase
+                s.game_state.turn_phase = if rolls_remaining == 0 {
+                    Some(TurnPhase::MustScore)
+                } else {
+                    Some(TurnPhase::Rolling { rolls_used: MAX_ROLLS - rolls_remaining })
+                };
             }
         }
 
@@ -394,9 +401,16 @@ fn handle_server_message(
         } => {
             if let Screen::Game(s) = screen {
                 s.current_turn_player_id = Some(turn_pid);
+                // Update current_player_index so scoreboard shows potential scores in the right column
+                if let Some(idx) = s.game_state.players.iter().position(|p| p.id == turn_pid) {
+                    s.game_state.current_player_index = idx;
+                }
                 s.round = turn_number;
+                s.game_state.round = turn_number;
                 s.rolls_remaining = MAX_ROLLS;
                 s.dice = None;
+                s.selected_category_index = 0;
+                s.game_state.turn_phase = Some(TurnPhase::WaitingForRoll);
                 s.status_message =
                     Some(format!("{}'s turn (round {})", turn_name, turn_number));
             }

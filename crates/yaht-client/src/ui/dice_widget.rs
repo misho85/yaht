@@ -5,29 +5,26 @@ use ratatui::{
 
 use yaht_common::dice::Die;
 
-/// Render ASCII art for a single die face using dot patterns.
-/// Returns 6 lines of styled text (top border + 3 face rows + bottom border + label).
-pub fn render_die(die: &Die, index: usize) -> Vec<Line<'static>> {
-    render_die_styled(die, index, false)
-}
-
 fn render_die_styled(die: &Die, index: usize, animating: bool) -> Vec<Line<'static>> {
-    let border_style = if animating && !die.held {
-        Style::default().fg(Color::Cyan)
+    let (border_style, dot_style) = if animating && !die.held {
+        (
+            Style::default().fg(Color::Rgb(100, 200, 255)),
+            Style::default()
+                .fg(Color::Rgb(100, 255, 200))
+                .add_modifier(Modifier::BOLD),
+        )
     } else if die.held {
-        Style::default().fg(Color::Yellow)
+        (
+            Style::default().fg(Color::Rgb(255, 180, 50)),
+            Style::default()
+                .fg(Color::Rgb(255, 220, 100))
+                .add_modifier(Modifier::BOLD),
+        )
     } else {
-        Style::default().fg(Color::White)
-    };
-
-    let dot_style = if animating && !die.held {
-        Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD)
-    } else if die.held {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::White)
+        (
+            Style::default().fg(Color::Rgb(180, 180, 200)),
+            Style::default().fg(Color::White),
+        )
     };
 
     let (top, mid, bot) = die_face(die.value);
@@ -36,6 +33,14 @@ fn render_die_styled(die: &Die, index: usize, animating: bool) -> Vec<Line<'stat
         format!(" [{}]* ", index + 1)
     } else {
         format!("  {}   ", index + 1)
+    };
+
+    let label_style = if die.held {
+        Style::default()
+            .fg(Color::Rgb(255, 180, 50))
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Rgb(120, 120, 140))
     };
 
     vec![
@@ -56,7 +61,7 @@ fn render_die_styled(die: &Die, index: usize, animating: bool) -> Vec<Line<'stat
             Span::styled("│", border_style),
         ]),
         Line::from(Span::styled("└─────┘", border_style)),
-        Line::from(Span::styled(label, border_style)),
+        Line::from(Span::styled(label, label_style)),
     ]
 }
 

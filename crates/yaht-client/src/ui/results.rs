@@ -51,7 +51,7 @@ impl ResultsScreen {
         let title = Paragraph::new(Line::from(vec![Span::styled(
             "  GAME OVER",
             Style::default()
-                .fg(Color::Yellow)
+                .fg(Color::Rgb(255, 220, 50))
                 .add_modifier(Modifier::BOLD),
         )]))
         .alignment(ratatui::layout::Alignment::Center);
@@ -66,48 +66,60 @@ impl ResultsScreen {
             .unwrap_or("Unknown");
 
         let winner = Paragraph::new(Line::from(vec![
-            Span::raw("  Winner: "),
+            Span::styled("  Winner: ", Style::default().fg(Color::Rgb(180, 180, 200))),
             Span::styled(
                 winner_name,
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(Color::Rgb(100, 255, 150))
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw("!"),
+            Span::styled(" !", Style::default().fg(Color::Rgb(255, 220, 50))),
         ]))
         .alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(winner, vertical[2]);
 
         // Score table
         let header = Row::new(vec![
-            Cell::from("Rank"),
-            Cell::from("Player"),
-            Cell::from("Score"),
+            Cell::from("Rank").style(Style::default().fg(Color::Rgb(180, 180, 200))),
+            Cell::from("Player").style(Style::default().fg(Color::Rgb(180, 180, 200))),
+            Cell::from("Score").style(Style::default().fg(Color::Rgb(180, 180, 200))),
         ])
-        .style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
+        .style(Style::default().add_modifier(Modifier::BOLD))
         .bottom_margin(1);
+
+        let podium_colors = [
+            Color::Rgb(255, 220, 50),  // Gold
+            Color::Rgb(180, 200, 220), // Silver
+            Color::Rgb(210, 150, 100), // Bronze
+        ];
 
         let rows: Vec<Row> = self
             .final_scores
             .iter()
             .enumerate()
-            .map(|(i, (id, name, score))| {
-                let rank_style = match i {
-                    0 => Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                    1 => Style::default().fg(Color::LightBlue),
-                    2 => Style::default().fg(Color::Red),
-                    _ => Style::default(),
+            .map(|(i, (_id, name, score))| {
+                let color = if i < 3 {
+                    podium_colors[i]
+                } else {
+                    Color::Rgb(120, 120, 140)
+                };
+                let style = if i == 0 {
+                    Style::default()
+                        .fg(color)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(color)
+                };
+                let medal = match i {
+                    0 => "  #1",
+                    1 => "  #2",
+                    2 => "  #3",
+                    _ => "   -",
                 };
                 Row::new(vec![
-                    Cell::from(format!("  #{}", i + 1)).style(rank_style),
-                    Cell::from(name.clone()).style(rank_style),
-                    Cell::from(score.to_string()).style(rank_style),
+                    Cell::from(medal.to_string()).style(style),
+                    Cell::from(name.clone()).style(style),
+                    Cell::from(score.to_string()).style(style),
                 ])
             })
             .collect();
@@ -121,14 +133,25 @@ impl ResultsScreen {
         let table = Table::new(rows, widths).header(header).block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Final Scores "),
+                .border_style(Style::default().fg(Color::Rgb(80, 80, 100)))
+                .title(" Final Scores ")
+                .title_style(
+                    Style::default()
+                        .fg(Color::Rgb(255, 220, 50))
+                        .add_modifier(Modifier::BOLD),
+                ),
         );
         frame.render_widget(table, horizontal[1]);
 
         // Help
-        let help = Paragraph::new("  [Enter] Back to lobby  [Q] Quit")
-            .style(Style::default().fg(Color::DarkGray))
-            .alignment(ratatui::layout::Alignment::Center);
+        let help = Paragraph::new(Line::from(vec![
+            Span::raw("  "),
+            Span::styled("[Enter]", Style::default().fg(Color::Rgb(100, 255, 150))),
+            Span::styled(" Back to lobby  ", Style::default().fg(Color::Rgb(120, 120, 140))),
+            Span::styled("[Q]", Style::default().fg(Color::Rgb(255, 150, 100))),
+            Span::styled(" Quit", Style::default().fg(Color::Rgb(120, 120, 140))),
+        ]))
+        .alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(help, vertical[4]);
     }
 }
